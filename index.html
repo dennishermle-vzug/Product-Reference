@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Produktreferenz-Suche</title>
+  <style>
+    /* ── Password screen ─────────────────────────────── */
+    #pw-screen {
+      position: fixed; inset: 0; z-index: 9999;
+      background: #f0f2f5;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pw-box {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      padding: 40px 36px;
+      box-shadow: 0 8px 32px rgba(30,58,95,.12);
+      text-align: center;
+      width: 100%; max-width: 360px;
+    }
+    .pw-logo { font-size: 2.2rem; margin-bottom: 12px; }
+    .pw-title {
+      font-size: 1.1rem; font-weight: 700;
+      color: #1e3a5f; margin-bottom: 4px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .pw-sub {
+      font-size: .82rem; color: #6b7280; margin-bottom: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .pw-input {
+      width: 100%; padding: 11px 14px;
+      border: 1.5px solid #e5e7eb; border-radius: 8px;
+      font-size: 1.05rem; text-align: center;
+      letter-spacing: .15em; outline: none;
+      font-family: ui-monospace, monospace;
+      margin-bottom: 12px; transition: border-color .15s;
+    }
+    .pw-input:focus { border-color: #1a6faf; }
+    .pw-input.shake {
+      animation: shake .35s ease;
+      border-color: #dc2626;
+    }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%      { transform: translateX(-8px); }
+      40%      { transform: translateX(8px); }
+      60%      { transform: translateX(-6px); }
+      80%      { transform: translateX(6px); }
+    }
+    .pw-btn {
+      width: 100%; padding: 11px;
+      background: #1a6faf; color: #fff; border: none;
+      border-radius: 8px; font-size: .95rem; font-weight: 600;
+      cursor: pointer; transition: background .15s;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .pw-btn:hover { background: #1558a0; }
+    .pw-error {
+      font-size: .78rem; color: #dc2626; margin-top: 10px;
+      min-height: 18px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    /* Hide main content until unlocked */
+    body.locked > *:not(#pw-screen) { visibility: hidden; }
+  </style>
+  <style>
+    :root {
+      --primary: #1e3a5f;
+      --accent:  #1a6faf;
+      --bg:      #f0f2f5;
+      --card:    #ffffff;
+      --text:    #1a1a1a;
+      --muted:   #6b7280;
+      --border:  #e5e7eb;
+
+      --pred-bg:     #eff6ff;
+      --pred-border: #93c5fd;
+      --pred-color:  #1d4ed8;
+      --curr-bg:     #eef2f8;
+      --curr-border: #6b8cbf;
+      --succ-bg:     #f0fdf4;
+      --succ-border: #86efac;
+      --succ-color:  #15803d;
+
+      --err:  #dc2626;
+      --warn: #d97706;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ─────────────────────────────────────── */
+    .app-header {
+      background: var(--primary); color: #fff;
+      padding: 14px 28px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    }
+    .app-header h1   { font-size: 1.15rem; font-weight: 600; }
+    .app-header .sub { font-size: .75rem; opacity: .6; margin-top: 3px; }
+    .app-header .dstat { font-size: .78rem; opacity: .65; }
+
+    /* ── Layout ──────────────────────────────────────── */
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 22px 18px; }
+
+    .card {
+      background: var(--card);
+      border-radius: 12px; border: 1px solid var(--border);
+      padding: 20px 22px; margin-bottom: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .card-title {
+      font-size: .9rem; font-weight: 600; color: var(--primary);
+      margin-bottom: 16px; display: flex; align-items: center; gap: 6px;
+    }
+
+    /* ── Upload ──────────────────────────────────────── */
+    .drop-zone {
+      border: 2px dashed var(--border); border-radius: 8px;
+      padding: 26px 18px; text-align: center; cursor: pointer; transition: .15s;
+    }
+    .drop-zone:hover, .drop-zone.drag { border-color: var(--accent); background: #f0f7ff; }
+    .drop-zone.ready { border-color: var(--succ-border); background: var(--succ-bg); border-style: solid; }
+    .drop-zone strong { display: block; font-size: .95rem; margin-bottom: 4px; }
+    .drop-zone p      { font-size: .82rem; color: var(--muted); margin-top: 4px; }
+    .btn-pick {
+      display: inline-block; background: var(--accent); color: #fff; border: none;
+      padding: 7px 18px; border-radius: 6px; font-size: .86rem; font-weight: 500;
+      cursor: pointer; margin-top: 10px;
+    }
+    #fileInput  { display: none; }
+    .load-msg   { font-size: .8rem; margin-top: 9px; color: var(--muted); }
+    .load-msg.ok { color: var(--succ-color); font-weight: 500; }
+
+    /* ── Search ──────────────────────────────────────── */
+    .search-row { display: flex; gap: 10px; align-items: center; }
+    .search-row label { font-size: .88rem; font-weight: 500; white-space: nowrap; }
+    .search-row input {
+      flex: 1; padding: 9px 14px;
+      border: 1.5px solid var(--border); border-radius: 8px; font-size: .97rem; outline: none;
+    }
+    .search-row input:focus { border-color: var(--accent); }
+    .btn-search {
+      background: var(--accent); color: #fff; border: none;
+      padding: 9px 24px; border-radius: 8px;
+      font-size: .9rem; font-weight: 500; cursor: pointer; white-space: nowrap;
+    }
+    .btn-search:disabled { background: #9ca3af; cursor: default; }
+
+    /* ── Stats chips ─────────────────────────────────── */
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .chip  { font-size: .77rem; padding: 3px 11px; border-radius: 20px; font-weight: 500; }
+    .chip.blue  { background: #dbeafe; color: #1d4ed8; }
+    .chip.green { background: #dcfce7; color: #15803d; }
+    .chip.gray  { background: #f3f4f6; color: #374151; }
+
+    /* ── Tree layout ─────────────────────────────────── */
+    .chain-wrap {
+      position: relative;
+      /* rows are stacked vertically, each row can contain multiple nodes */
+    }
+
+    /* One horizontal "generation" row */
+    .level-row {
+      display: flex;
+      flex-direction: row;
+      gap: 16px;
+      align-items: stretch;
+      /* vertical spacing between rows (arrows live in this gap) */
+      margin-bottom: 72px;
+    }
+    .level-row:last-child { margin-bottom: 0; }
+
+    /* Center a single-node row */
+    .level-row.single { justify-content: center; }
+
+    /* ── Chain nodes ─────────────────────────────────── */
+    .chain-node {
+      flex: 1;
+      min-width: 0;
+      border-radius: 10px; padding: 14px 16px;
+      border: 2px solid var(--border);
+    }
+    .chain-node.predecessor { border-color: var(--pred-border); background: var(--pred-bg); }
+    .chain-node.current     {
+      border-color: var(--curr-border); background: var(--curr-bg);
+      box-shadow: 0 3px 14px rgba(30,58,95,.16);
+    }
+    .chain-node.successor   { border-color: var(--succ-border); background: var(--succ-bg); }
+
+    /* Single-node row: cap max-width for readability */
+    .level-row.single .chain-node { max-width: 620px; }
+
+    .node-badge {
+      font-size: .66rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .07em; padding: 2px 8px; border-radius: 20px;
+      display: inline-block; margin-bottom: 7px;
+    }
+    .node-badge.predecessor { background: #dbeafe; color: var(--pred-color); }
+    .node-badge.current     { background: var(--primary); color: #fff; }
+    .node-badge.successor   { background: #dcfce7; color: var(--succ-color); }
+
+    .node-artnum {
+      font-size: 1.3rem; font-weight: 700; color: var(--primary);
+      font-family: ui-monospace, 'Fira Code', 'Cascadia Code', monospace;
+      cursor: pointer; line-height: 1.2;
+    }
+    .node-artnum:hover { text-decoration: underline; }
+
+    .node-desc { font-size: .8rem; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+
+    .node-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .node-tag {
+      font-size: .68rem; background: #f3f4f6; color: #374151;
+      padding: 2px 6px; border-radius: 4px; border: 1px solid #e5e7eb;
+    }
+
+    /* ── SVG arrows overlay ──────────────────────────── */
+    #chainSvg {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none; overflow: visible;
+    }
+
+    /* ── Edge PS info bubbles ────────────────────────── */
+    .edge-info {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 7px;
+      padding: 4px 8px;
+      display: flex; flex-direction: column; gap: 2px;
+      z-index: 10;
+      pointer-events: none;
+      box-shadow: 0 1px 5px rgba(0,0,0,.09);
+    }
+    .edge-ps-row {
+      display: flex; align-items: center; gap: 5px;
+      font-size: .68rem; font-family: monospace; white-space: nowrap;
+    }
+    .ps-cat {
+      font-size: .64rem; font-weight: 700; font-family: sans-serif;
+      background: #e0e7ef; color: #1e3a5f;
+      padding: 1px 5px; border-radius: 3px;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .ps-cat.online { background: #dcfce7; color: #15803d; }
+    .ps-cat.staged { background: #fef9c3; color: #92400e; }
+    .ps-num { color: #4b5563; letter-spacing: .01em; }
+    .ps-more {
+      font-size: .67rem; color: var(--muted); font-family: sans-serif;
+      margin-top: 1px; padding-left: 2px; cursor: default;
+    }
+
+    /* ── Catalog table ───────────────────────────────── */
+    .tbl-outer { overflow-x: auto; }
+    table.cat-tbl {
+      border-collapse: collapse; font-size: .8rem; min-width: max-content;
+    }
+    .cat-tbl th {
+      background: var(--primary); color: #fff;
+      padding: 7px 10px; font-weight: 500; font-size: .73rem;
+      text-align: center; white-space: nowrap;
+    }
+    .cat-tbl th:first-child  { text-align: left; min-width: 140px; }
+    .cat-tbl th:nth-child(2) { text-align: left; min-width: 90px; }
+    .cat-tbl td {
+      padding: 7px 10px; border-bottom: 1px solid var(--border);
+      text-align: center; vertical-align: middle;
+    }
+    .cat-tbl td:first-child  { text-align: left; font-weight: 600; font-family: monospace; font-size: .83rem; }
+    .cat-tbl td:nth-child(2) { text-align: left; font-size: .76rem; color: var(--muted); }
+    .cat-tbl tr.c-row td     { background: #eef2f8; }
+    .cat-tbl tr:hover:not(.c-row):not(.gen-hdr) td { background: #f9fafb; }
+    .cat-tbl tr.c-row:hover td { background: #e5ebf3; }
+
+    /* Generation header rows in table */
+    .cat-tbl tr.gen-hdr td {
+      font-size: .72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; padding: 5px 10px;
+      border-bottom: none; text-align: left;
+    }
+    .cat-tbl tr.gen-hdr.pred td { background: #eff6ff; color: #1d4ed8; border-top: 1px solid #93c5fd; }
+    .cat-tbl tr.gen-hdr.curr td { background: #eef2f8; color: var(--primary); border-top: 1px solid #6b8cbf; }
+    .cat-tbl tr.gen-hdr.succ td { background: #f0fdf4; color: #15803d; border-top: 1px solid #86efac; }
+
+    .dot-on   { color: #16a34a; font-size: 1rem; }
+    .dot-st   { color: #d97706; font-size: .85rem; }
+    .dot-both { display: flex; flex-direction: column; align-items: center; gap: 0; line-height: 1.1; }
+    .dot-none { color: #d1d5db; font-size: .85rem; }
+    .tbl-legend { font-size: .73rem; color: var(--muted); margin-top: 9px; }
+
+    /* ── Error panel ─────────────────────────────────── */
+    .err-list { display: flex; flex-direction: column; gap: 8px; }
+    .err-item {
+      display: flex; gap: 8px; align-items: flex-start;
+      padding: 9px 13px; border-radius: 8px; font-size: .83rem;
+    }
+    .err-item.error   { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .err-item.warning { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+    .err-item.info    { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+    .err-ok { font-size: .86rem; color: #16a34a; display: flex; align-items: center; gap: 6px; }
+
+    /* ── Misc ────────────────────────────────────────── */
+    #results  { display: none; }
+    .not-found { padding: 32px; text-align: center; color: var(--muted); font-size: .88rem; }
+
+    @media (max-width: 600px) {
+      .search-row { flex-direction: column; align-items: stretch; }
+      .level-row  { flex-direction: column; }
+    }
+  </style>
+</head>
+<body class="locked">
+
+<!-- ── Password screen ───────────────────────────────── -->
+<div id="pw-screen">
+  <div class="pw-box">
+    <div class="pw-logo">🔒</div>
+    <div class="pw-title">Produktreferenz-Suche</div>
+    <div class="pw-sub">Bitte Zugangscode eingeben</div>
+    <input
+      type="password"
+      id="pw-input"
+      class="pw-input"
+      placeholder="••••"
+      maxlength="20"
+      autocomplete="off"
+      onkeydown="if(event.key==='Enter') checkPw()"
+      autofocus
+    >
+    <button class="pw-btn" onclick="checkPw()">Bestätigen</button>
+    <div class="pw-error" id="pw-error"></div>
+  </div>
+</div>
+
+<header class="app-header">
+  <div>
+    <h1>🔍 Produktreferenz-Suche</h1>
+    <div class="sub">Vorgänger · Nachfolger · Länderkataloge</div>
+  </div>
+  <div class="dstat" id="dataStatus">Keine Datei geladen</div>
+</header>
+
+<main class="wrap">
+
+  <!-- Upload -->
+  <div class="card">
+    <div class="drop-zone" id="dropZone"
+         onclick="document.getElementById('fileInput').click()">
+      <strong>📂 CSV-Datei hochladen</strong>
+      <p>product_reference_SAP.csv · Semikolon-getrennt · UTF-8</p>
+      <button class="btn-pick"
+              onclick="event.stopPropagation();document.getElementById('fileInput').click()">
+        Datei auswählen
+      </button>
+      <input type="file" id="fileInput" accept=".csv,.txt">
+    </div>
+    <div class="load-msg" id="loadMsg">Bitte CSV-Datei laden, um die Suche zu starten.</div>
+  </div>
+
+  <!-- Search -->
+  <div class="card">
+    <div class="search-row">
+      <label for="searchInput">Artikelnummer:</label>
+      <input type="text" id="searchInput" placeholder="z. B. 040406"
+             autocomplete="off" onkeydown="if(event.key==='Enter') doSearch()">
+      <button class="btn-search" id="searchBtn" onclick="doSearch()" disabled>Suchen</button>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+
+    <div class="card">
+      <div class="card-title">🔗 Produktkette
+        <span style="font-weight:400;color:var(--muted);font-size:.78rem">
+          (ältester Vorgänger oben → neuester Nachfolger unten · mehrere Zweige nebeneinander)
+        </span>
+      </div>
+      <div class="chips" id="chainStats"></div>
+      <div class="chain-wrap" id="chainWrap"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🌍 Länderkataloge</div>
+      <div class="tbl-outer"><table class="cat-tbl" id="catTable"></table></div>
+      <div class="tbl-legend">● = online &nbsp;&nbsp;&nbsp; ◎ = staged &nbsp;&nbsp;&nbsp; – = nicht vorhanden</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚠️ Prüfbericht</div>
+      <div class="err-list" id="errList"></div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+'use strict';
+
+/* ── Password protection ─────────────────────────────── */
+(function () {
+  const CORRECT = 'ECOM';
+  const SESSION_KEY = 'prs_auth';
+
+  function unlock() {
+    document.getElementById('pw-screen').style.display = 'none';
+    document.body.classList.remove('locked');
+  }
+
+  // Stay unlocked within the same browser session
+  if (sessionStorage.getItem(SESSION_KEY) === '1') { unlock(); return; }
+
+  window.checkPw = function () {
+    const val = document.getElementById('pw-input').value.trim().toUpperCase();
+    if (val === CORRECT) {
+      sessionStorage.setItem(SESSION_KEY, '1');
+      unlock();
+    } else {
+      const inp = document.getElementById('pw-input');
+      const err = document.getElementById('pw-error');
+      inp.classList.remove('shake');
+      void inp.offsetWidth; // reflow to restart animation
+      inp.classList.add('shake');
+      inp.value = '';
+      err.textContent = 'Ungültiger Zugangscode – bitte erneut versuchen.';
+      setTimeout(() => { inp.classList.remove('shake'); err.textContent = ''; }, 2000);
+    }
+  };
+})();
+
+/* ═══════════════════════════════════════════════════════════════
+   DATA STRUCTURES
+═══════════════════════════════════════════════════════════════ */
+let allRows   = [];
+let sourceMap = {};   // sourceArtNum → [row, ...]
+let targetMap = {};   // targetArtNum → [row, ...]
+let artInfo   = {};   // artNum → { desc, cats: Map<baseName, {online,staged}> }
+let psMap     = {};   // "newer|older" → [{ps, cat}]
+
+/* ═══════════════════════════════════════════════════════════════
+   PARSING HELPERS
+═══════════════════════════════════════════════════════════════ */
+
+function extractArtNum(str) {
+  const i = str.indexOf(' - ');
+  return i === -1 ? str.trim() : str.slice(0, i).trim();
+}
+
+function extractCatalog(str) {
+  const lo = str.lastIndexOf('(');
+  if (lo === -1) return '';
+  const lc = str.lastIndexOf(')');
+  if (lc < lo) return '';
+  return str.slice(lo + 1, lc).trim();
+}
+
+function extractDesc(str) {
+  const di = str.indexOf(' - ');
+  if (di === -1) return str.trim();
+  let s = str.slice(di + 3);
+  const lo = s.lastIndexOf('(');
+  if (lo !== -1) {
+    const lc = s.lastIndexOf(')');
+    if (lc > lo && s.slice(lo + 1, lc).includes('Catalog')) s = s.slice(0, lo).trim();
+  }
+  return s.trim();
+}
+
+function catBase(cat)   { return cat.replace(/ - online$/, '').replace(/ - staged$/, '').trim(); }
+function catStatus(cat) {
+  if (cat.endsWith('- online')) return 'online';
+  if (cat.endsWith('- staged')) return 'staged';
+  return 'other';
+}
+function catShort(base) {
+  const m = base.match(/^(.+?)-Catalog/);
+  if (m) return m[1].toUpperCase();
+  const m2 = base.match(/^(.+?)Catalog/);
+  if (m2) return (m2[1] || base).toUpperCase();
+  return base.toUpperCase();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CSV LOADING & INDEXING
+═══════════════════════════════════════════════════════════════ */
+
+function parseCSV(text) {
+  const rows = [];
+  const lines = text.split('\n');
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const p = line.split(';');
+    if (p.length < 9) continue;
+    const sRaw = p[0].trim(), tRaw = p[1].trim();
+    if (!sRaw || !tRaw) continue;
+    const sArt = extractArtNum(sRaw), tArt = extractArtNum(tRaw);
+    if (!sArt || !tArt) continue;
+    rows.push({
+      sRaw, tRaw, sArt, tArt,
+      sCat: extractCatalog(sRaw), tCat: extractCatalog(tRaw),
+      sDesc: extractDesc(sRaw),   tDesc: extractDesc(tRaw),
+      type: (p[2] || '').trim(),  ps: (p[8] || '').trim(),
+    });
+  }
+  return rows;
+}
+
+function buildIndex(rows) {
+  sourceMap = {}; targetMap = {}; artInfo = {}; psMap = {};
+
+  function reg(num, d, cat) {
+    if (!artInfo[num]) artInfo[num] = { desc: d, cats: new Map() };
+    if (!artInfo[num].desc && d) artInfo[num].desc = d;
+    if (cat) {
+      const base = catBase(cat), st = catStatus(cat);
+      if (!artInfo[num].cats.has(base)) artInfo[num].cats.set(base, { online: false, staged: false });
+      const c = artInfo[num].cats.get(base);
+      if (st === 'online') c.online = true;
+      if (st === 'staged') c.staged = true;
+    }
+  }
+
+  for (const r of rows) {
+    (sourceMap[r.sArt] ??= []).push(r);
+    (targetMap[r.tArt] ??= []).push(r);
+    reg(r.sArt, r.sDesc, r.sCat);
+    reg(r.tArt, r.tDesc, r.tCat);
+    // PS map: newer article = r.sArt, older = r.tArt
+    const key = `${r.sArt}|${r.tArt}`;
+    if (!psMap[key]) psMap[key] = [];
+    const catFull = r.sCat || r.tCat || '';
+    if (!psMap[key].some(e => e.ps === r.ps && e.cat === catFull)) {
+      psMap[key].push({ ps: r.ps, cat: catFull });
+    }
+  }
+}
+
+/* ── File input ──────────────────────────────────────────────── */
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    allRows = parseCSV(ev.target.result);
+    buildIndex(allRows);
+    document.getElementById('dropZone').classList.add('ready');
+    document.getElementById('dropZone').querySelector('strong').textContent = '✓ ' + file.name;
+    const msg = document.getElementById('loadMsg');
+    msg.textContent =
+      `${allRows.length.toLocaleString('de-CH')} Einträge · ` +
+      `${Object.keys(artInfo).length.toLocaleString('de-CH')} eindeutige Artikelnummern geladen`;
+    msg.classList.add('ok');
+    document.getElementById('dataStatus').textContent =
+      Object.keys(artInfo).length.toLocaleString('de-CH') + ' Artikel';
+    document.getElementById('searchBtn').disabled = false;
+    document.getElementById('searchInput').focus();
+  };
+  reader.readAsText(file, 'UTF-8');
+});
+
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', ()  => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const dt = new DataTransfer(); dt.items.add(file);
+  document.getElementById('fileInput').files = dt.files;
+  document.getElementById('fileInput').dispatchEvent(new Event('change'));
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   TREE BUILDING
+   BFS from start article.
+   Level 0 = searched article
+   Level < 0 = predecessors (older)
+   Level > 0 = successors (newer)
+═══════════════════════════════════════════════════════════════ */
+
+function buildTree(start) {
+  const nodeLevel = {};   // artNum → level (integer)
+  const edges     = [];   // { older, newer }
+  const visited   = new Set();
+
+  // BFS queue: [artNum, level]
+  const queue = [[start, 0]];
+  visited.add(start);
+  nodeLevel[start] = 0;
+
+  while (queue.length) {
+    const [art, lvl] = queue.shift();
+
+    // ── Predecessors: what did this article replace? (sourceMap[art] → row.tArt = older)
+    const preds = new Set((sourceMap[art] || []).map(r => r.tArt));
+    for (const pred of preds) {
+      // Register edge: pred (older) → art (newer)
+      if (!edges.some(e => e.older === pred && e.newer === art)) {
+        edges.push({ older: pred, newer: art });
+      }
+      if (!visited.has(pred)) {
+        visited.add(pred);
+        nodeLevel[pred] = lvl - 1;
+        queue.push([pred, lvl - 1]);
+      }
+    }
+
+    // ── Successors: what replaced this article? (targetMap[art] → row.sArt = newer)
+    const succs = new Set((targetMap[art] || []).map(r => r.sArt));
+    for (const succ of succs) {
+      // Register edge: art (older) → succ (newer)
+      if (!edges.some(e => e.older === art && e.newer === succ)) {
+        edges.push({ older: art, newer: succ });
+      }
+      if (!visited.has(succ)) {
+        visited.add(succ);
+        nodeLevel[succ] = lvl + 1;
+        queue.push([succ, lvl + 1]);
+      }
+    }
+  }
+
+  // Group articles by level
+  const byLevel = {};
+  for (const [artNum, lvl] of Object.entries(nodeLevel)) {
+    (byLevel[lvl] ??= []).push(artNum);
+  }
+
+  return { nodeLevel, byLevel, edges, start };
+}
+
+function getPsEntries(newer, older) {
+  return (psMap[`${newer}|${older}`] || []).filter(e => e.ps);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SEARCH
+═══════════════════════════════════════════════════════════════ */
+
+function doSearch() {
+  let q = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+
+  if (!artInfo[q]) {
+    const hits = Object.keys(artInfo).filter(k => k.startsWith(q));
+    if (!hits.length) { showNotFound(q); return; }
+    q = hits[0];
+    document.getElementById('searchInput').value = q;
+  }
+
+  const tree = buildTree(q);
+  renderTree(tree);
+  renderCatalogTable(tree);
+  renderErrors(tree, q);
+
+  const el = document.getElementById('results');
+  el.style.display = 'block';
+  setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+}
+
+function showNotFound(q) {
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('chainStats').innerHTML = '';
+  document.getElementById('chainWrap').innerHTML =
+    `<div class="not-found">Artikelnummer <strong>${q}</strong> wurde nicht gefunden.</div>`;
+  document.getElementById('catTable').innerHTML = '';
+  document.getElementById('errList').innerHTML = '';
+}
+
+function jumpTo(artNum) {
+  document.getElementById('searchInput').value = artNum;
+  doSearch();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER TREE (level rows + SVG arrows)
+═══════════════════════════════════════════════════════════════ */
+
+function renderTree(tree) {
+  const wrap = document.getElementById('chainWrap');
+  wrap.innerHTML = '';
+
+  const levels = Object.keys(tree.byLevel).map(Number).sort((a, b) => a - b);
+
+  // Stats
+  const predCount = levels.filter(l => l < 0).reduce((s, l) => s + tree.byLevel[l].length, 0);
+  const succCount = levels.filter(l => l > 0).reduce((s, l) => s + tree.byLevel[l].length, 0);
+  const total     = Object.values(tree.byLevel).reduce((s, a) => s + a.length, 0);
+
+  document.getElementById('chainStats').innerHTML =
+    `<span class="chip blue">${predCount} Vorgänger</span>` +
+    `<span class="chip gray">${total} Artikel gesamt</span>` +
+    `<span class="chip green">${succCount} Nachfolger</span>`;
+
+  // Render each level as a flex row
+  levels.forEach(lvl => {
+    const arts  = tree.byLevel[lvl];
+    const row   = document.createElement('div');
+    row.className = 'level-row' + (arts.length === 1 ? ' single' : '');
+    row.dataset.level = lvl;
+
+    arts.forEach(artNum => {
+      const role = artNum === tree.start ? 'current'
+                 : lvl < 0              ? 'predecessor'
+                 :                        'successor';
+      const info  = artInfo[artNum] || { desc: '', cats: new Map() };
+      const badge = role === 'current'     ? '🔍 Gesuchter Artikel'
+                  : role === 'predecessor' ? (lvl === -1 ? 'Direkter Vorgänger' : 'Vorgänger')
+                  :                         (lvl ===  1 ? 'Direkter Nachfolger' : 'Nachfolger');
+
+      const tagHtml = [...info.cats.keys()].sort().map(base => {
+        const c = info.cats.get(base);
+        const dots = (c.online ? '●' : '') + (c.staged ? ' ◎' : '');
+        return `<span class="node-tag">${catShort(base)} ${dots.trim()}</span>`;
+      }).join('');
+
+      const node = document.createElement('div');
+      node.className = `chain-node ${role}`;
+      node.dataset.artnum = artNum;
+      node.innerHTML =
+        `<span class="node-badge ${role}">${badge}</span>` +
+        `<div class="node-artnum" onclick="jumpTo('${artNum.replace(/'/g,"\\'")}')">` +
+          artNum +
+        `</div>` +
+        (info.desc ? `<div class="node-desc">${info.desc}</div>` : '') +
+        (tagHtml   ? `<div class="node-tags">${tagHtml}</div>` : '');
+      row.appendChild(node);
+    });
+
+    wrap.appendChild(row);
+  });
+
+  // SVG overlay (arrows will be drawn after DOM renders)
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.id = 'chainSvg';
+  wrap.appendChild(svg);
+
+  // Wait for layout, then draw
+  requestAnimationFrame(() => requestAnimationFrame(() => drawEdges(tree.edges, wrap, svg)));
+
+  // Redraw on resize
+  if (wrap._resizeObs) wrap._resizeObs.disconnect();
+  const ro = new ResizeObserver(() => drawEdges(tree.edges, wrap, svg));
+  ro.observe(wrap);
+  wrap._resizeObs = ro;
+  wrap._lastEdges = tree.edges;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DRAW SVG EDGES + PS BUBBLES
+═══════════════════════════════════════════════════════════════ */
+
+function drawEdges(edges, container, svg) {
+  // Clear previous drawings
+  svg.innerHTML = '';
+  container.querySelectorAll('.edge-info').forEach(el => el.remove());
+
+  const cRect = container.getBoundingClientRect();
+  if (cRect.width === 0) return;
+
+  // Arrowhead marker
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  defs.innerHTML =
+    `<marker id="ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+       <polygon points="0 0, 8 3, 0 6" fill="#9ca3af"/>
+     </marker>`;
+  svg.appendChild(defs);
+
+  // Update SVG size to cover container
+  svg.setAttribute('width',  container.offsetWidth);
+  svg.setAttribute('height', container.offsetHeight);
+
+  edges.forEach(({ older, newer }) => {
+    const olderEl = container.querySelector(`[data-artnum="${CSS.escape(older)}"]`);
+    const newerEl = container.querySelector(`[data-artnum="${CSS.escape(newer)}"]`);
+    if (!olderEl || !newerEl) return;
+
+    const oRect = olderEl.getBoundingClientRect();
+    const nRect = newerEl.getBoundingClientRect();
+
+    // Center-bottom of older, center-top of newer (relative to container)
+    const x1 = oRect.left + oRect.width  / 2 - cRect.left;
+    const y1 = oRect.bottom              - cRect.top;
+    const x2 = nRect.left + nRect.width  / 2 - cRect.left;
+    const y2 = nRect.top                 - cRect.top;
+
+    const midY = (y1 + y2) / 2;
+    const d = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
+
+    // Draw path
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('stroke', '#9ca3af');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('marker-end', 'url(#ah)');
+    svg.appendChild(path);
+
+    // PS info bubble at curve midpoint
+    const psEntries = getPsEntries(newer, older);
+    if (!psEntries.length) return;
+
+    // Bezier midpoint at t=0.5
+    const mx = 0.125 * x1 + 0.375 * x1 + 0.375 * x2 + 0.125 * x2; // = (x1+x2)/2
+    const my = 0.125 * y1 + 0.375 * midY + 0.375 * midY + 0.125 * y2;
+
+    const MAX_VISIBLE = 4;
+    const visible  = psEntries.slice(0, MAX_VISIBLE);
+    const overflow = psEntries.length - MAX_VISIBLE;
+
+    const rowsHtml = visible.map(e => {
+      const base   = catBase(e.cat);
+      const short  = catShort(base);
+      const status = catStatus(e.cat);
+      const cls    = status === 'online' ? 'online' : status === 'staged' ? 'staged' : '';
+      const dot    = status === 'online' ? '●' : status === 'staged' ? '◎' : '';
+      return `<div class="edge-ps-row">` +
+             `<span class="ps-cat ${cls}" title="${e.cat}">${dot} ${short}</span>` +
+             `<span class="ps-num">${e.ps}</span>` +
+             `</div>`;
+    }).join('');
+
+    const moreHtml = overflow > 0
+      ? `<div class="ps-more">… +${overflow} weitere</div>`
+      : '';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'edge-info';
+    bubble.style.left = mx + 'px';
+    bubble.style.top  = my + 'px';
+    bubble.innerHTML  = rowsHtml + moreHtml;
+    container.appendChild(bubble);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER CATALOG TABLE
+   Grouped by generation with colored section headers
+═══════════════════════════════════════════════════════════════ */
+
+function renderCatalogTable(tree) {
+  const table = document.getElementById('catTable');
+
+  // All catalog base names in this tree
+  const basesSet = new Set();
+  for (const artNum of Object.keys(tree.nodeLevel)) {
+    (artInfo[artNum]?.cats || new Map()).forEach((_, b) => basesSet.add(b));
+  }
+
+  const isCountry = b => /^[a-z]{2,3}-Catalog$/.test(b);
+  const bases = [...basesSet].sort((a, b) => {
+    if (isCountry(a) && !isCountry(b)) return -1;
+    if (!isCountry(a) && isCountry(b)) return 1;
+    return a.localeCompare(b);
+  });
+
+  if (!bases.length) {
+    table.innerHTML = '<tr><td colspan="2">Keine Katalogdaten vorhanden.</td></tr>';
+    return;
+  }
+
+  const colCount = bases.length + 2; // artnum + generation + catalog cols
+
+  // Header
+  const thead =
+    `<thead><tr>` +
+    `<th>Artikel</th>` +
+    `<th>Generation</th>` +
+    bases.map(b => `<th title="${b}">${catShort(b)}</th>`).join('') +
+    `</tr></thead>`;
+
+  // Sort levels and build rows with section headers
+  const levels = Object.keys(tree.byLevel).map(Number).sort((a, b) => a - b);
+  let tbodyHtml = '';
+
+  levels.forEach(lvl => {
+    const arts  = tree.byLevel[lvl];
+    const role  = lvl < 0 ? 'pred' : lvl === 0 ? 'curr' : 'succ';
+    const label = lvl === 0 ? 'Gesuchter Artikel'
+                : lvl === -1 ? 'Direkter Vorgänger'
+                : lvl ===  1 ? 'Direkter Nachfolger'
+                : lvl  <  0  ? `Vorgänger (${Math.abs(lvl)} Stufen)`
+                :               `Nachfolger (${lvl} Stufen)`;
+
+    // Section header row
+    tbodyHtml +=
+      `<tr class="gen-hdr ${role}">` +
+      `<td colspan="${colCount}">${label}</td>` +
+      `</tr>`;
+
+    // Article rows
+    arts.forEach(artNum => {
+      const info  = artInfo[artNum];
+      const isCurr = lvl === 0;
+      const genLabel = lvl === 0 ? '0' : lvl < 0 ? String(lvl) : `+${lvl}`;
+
+      const cells = bases.map(base => {
+        const c = info?.cats.get(base);
+        if (!c) return `<td class="dot-none">–</td>`;
+        if (c.online && c.staged)
+          return `<td><div class="dot-both">` +
+                 `<span class="dot-on" title="online">●</span>` +
+                 `<span class="dot-st" title="staged">◎</span>` +
+                 `</div></td>`;
+        if (c.online) return `<td><span class="dot-on" title="online">●</span></td>`;
+        if (c.staged) return `<td><span class="dot-st" title="staged">◎</span></td>`;
+        return `<td class="dot-none">–</td>`;
+      });
+
+      tbodyHtml +=
+        `<tr class="${isCurr ? 'c-row' : ''}">` +
+        `<td>${artNum}${isCurr ? ' 🔍' : ''}</td>` +
+        `<td style="color:var(--muted);font-size:.76rem">${genLabel}</td>` +
+        cells.join('') +
+        `</tr>`;
+    });
+  });
+
+  table.innerHTML = thead + `<tbody>${tbodyHtml}</tbody>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER ERROR REPORT
+═══════════════════════════════════════════════════════════════ */
+
+function renderErrors(tree, current) {
+  const issues = [];
+
+  if (!artInfo[current]) {
+    issues.push({ type: 'error', msg: `Artikel „${current}" ist in der Datei nicht vorhanden.` });
+  }
+
+  // Circular reference: same artNum at two different levels would indicate a cycle
+  // (BFS prevents it but edges might point back)
+  tree.edges.forEach(({ older, newer }) => {
+    if (tree.nodeLevel[older] >= tree.nodeLevel[newer]) {
+      issues.push({ type: 'error',
+        msg: `Zirkuläre/unerwartete Referenz: ${older} (Stufe ${tree.nodeLevel[older]}) → ${newer} (Stufe ${tree.nodeLevel[newer]})` });
+    }
+  });
+
+  // Branching: articles with more than one predecessor or successor within the chain
+  for (const artNum of Object.keys(tree.nodeLevel)) {
+    const predEdges = tree.edges.filter(e => e.newer === artNum);
+    const succEdges = tree.edges.filter(e => e.older === artNum);
+    if (predEdges.length > 1) {
+      issues.push({ type: 'warning',
+        msg: `${artNum} ersetzt ${predEdges.length} verschiedene Vorgänger: ` +
+             predEdges.map(e => e.older).join(', ') });
+    }
+    if (succEdges.length > 1) {
+      issues.push({ type: 'warning',
+        msg: `${artNum} wird von ${succEdges.length} verschiedenen Nachfolgern abgelöst: ` +
+             succEdges.map(e => e.newer).join(', ') });
+    }
+  }
+
+  // Catalog inconsistencies along each edge
+  tree.edges.forEach(({ older, newer }) => {
+    const aInfo = artInfo[older];
+    const bInfo = artInfo[newer];
+    if (!aInfo || !bInfo) return;
+    const aBases = new Set(aInfo.cats.keys());
+    const bBases = new Set(bInfo.cats.keys());
+    const missing = [...aBases].filter(b => !bBases.has(b));
+    const added   = [...bBases].filter(b => !aBases.has(b));
+    if (missing.length) {
+      issues.push({ type: 'warning',
+        msg: `Katalog-Differenz ${older} → ${newer}: In ${newer} fehlt: ${missing.map(catShort).join(', ')}` });
+    }
+    if (added.length) {
+      issues.push({ type: 'info',
+        msg: `${newer} erscheint in zusätzlichen Katalogen: ${added.map(catShort).join(', ')}` });
+    }
+  });
+
+  const el = document.getElementById('errList');
+  const icons = { error: '🔴', warning: '🟡', info: 'ℹ️' };
+  el.innerHTML = issues.length
+    ? issues.map(e =>
+        `<div class="err-item ${e.type}">` +
+        `<span>${icons[e.type]}</span><span>${e.msg}</span></div>`
+      ).join('')
+    : `<div class="err-ok">✅ Keine Auffälligkeiten in dieser Kette gefunden.</div>`;
+}
+</script>
+</body>
+</html>
